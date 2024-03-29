@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, ForeignKey, Float
 from sqlalchemy.orm import relationship
 
-from load_data.model.base import Base
+from load_data.db_model.base import Base
 
 
 class SensorData(Base):
