@@ -1,11 +1,10 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from model.model import Base, Subject, Activity
+from load_data.model.activity import Activity
+from load_data.model.base import Base
+from load_data.model.subject import Subject
+from load_data.my_session import engine, SessionLocal
 
-DATABASE_URI = 'your_database_connection_uri'
-engine = create_engine(DATABASE_URI)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 

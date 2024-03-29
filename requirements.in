@@ -1,0 +1,6 @@
+tensorflow
+SQLAlchemy
+pandas
+numpy
+psycopg2
+python-dotenv

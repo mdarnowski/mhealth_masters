@@ -1,39 +1,50 @@
-import pandas as pd
+from load_data.model.sensor_data import create_sensor_data
+from load_data.model.session import Session
+from load_data.my_session import SessionLocal
+from load_data.setup_db import populate_initial_data
 
-from load_data.define_subjects import SessionLocal
-from model.model import SensorData, Session
 
-
-def import_sensor_data(file_path, subject_id):
+def import_data_from_log(subject_id, log_file_path):
     db = SessionLocal()
-    # Assuming the filename or path contains a unique identifier for each subject
-    df = pd.read_csv(file_path)
 
-    # Iterate over each row in the DataFrame
-    for idx, row in df.iterrows():
-        label = row['Label']  # Assuming 'Label' is the last column as mentioned
-        if label == 0:
-            continue  # Skip rows where activity is not defined
+    last_label = None  # Variable to keep track of the last label encountered
+    session_obj = None  # Variable for the current session object
 
-        # Retrieve the session for the current subject and activity, or create it
-        session_obj = db.query(Session).filter_by(subject_id=subject_id, activity_id=label).first()
-        if not session_obj:
-            session_obj = Session(subject_id=subject_id, activity_id=label)
-            db.add(session_obj)
-            db.commit()
+    with open(log_file_path, "r") as file:
+        for idx, line in enumerate(file):
+            # Split the line assuming it's tab-separated
+            values = line.strip().split("\t")
 
-        # Create and add the SensorData
-        sensor_data = SensorData(
-            session_id=session_obj.id,
-            sequence=idx,
-            # Assign all sensor data columns from the row
-            acceleration_chest_x=row['acceleration from the chest sensor (X axis)'],
-            # Repeat for all sensor data columns...
-        )
-        db.add(sensor_data)
-    db.commit()
+            # Assuming the last value is the label
+            label = int(values[-1])
+            if label == 0:
+                continue
+
+            # If the label changes (indicating a new session), or if it's the first line
+            if label != last_label:
+                # Create a new session, no need to check for existing ones
+                session_obj = Session(subject_id=subject_id, activity_id=label)
+                db.add(session_obj)
+                db.commit()
+
+                last_label = label  # Update the last label
+
+            # Convert sensor data values from string to float, excluding the last label value
+            sensor_data_values = list(map(float, values[:-1]))
+
+            # Create SensorData instance and add to session
+            sensor_data = create_sensor_data(
+                idx + 1, session_obj.id, *sensor_data_values
+            )
+            db.add(sensor_data)
+
+        db.commit()
     db.close()
 
 
-# Example usage - You'll need to loop through your actual files and subjects
-import_sensor_data('path_to_file.csv', 1)
+populate_initial_data()
+# Loop through log files and import data
+for i in range(1, 11):
+    import_data_from_log(
+        subject_id=i, log_file_path=f"../data/log/mHealth_subject{i}.log"
+    )
