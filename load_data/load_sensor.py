@@ -71,6 +71,7 @@ def import_data_from_log(db, subject_id, file):
         label = int(values[-1])
 
         if label == 0:
+            last_label = label
             continue
 
         if label != last_label:
