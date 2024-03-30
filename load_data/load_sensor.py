@@ -5,6 +5,7 @@ from zipfile import ZipFile
 import requests
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.exc import ArgumentError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
 
@@ -91,11 +92,23 @@ def import_data_from_log(db, subject_id, file):
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    DATABASE_URI = os.getenv("DATABASE_URI")
-    db_engine = create_engine(DATABASE_URI)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
-    database = SessionLocal()
+    try:
+        load_dotenv()
+        DATABASE_URI = os.getenv("DATABASE_URI")
+        if DATABASE_URI is None:
+            raise ValueError("DATABASE_URI not found in environment variables")
+
+        db_engine = create_engine(DATABASE_URI)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
+        database = SessionLocal()
+    except (ArgumentError, OperationalError, SQLAlchemyError) as e:
+        raise RuntimeError(
+            "Database connection error. Please check your DATABASE_URI."
+        ) from e
+    except (EnvironmentError, KeyError, TypeError, ValueError) as e:
+        raise RuntimeError("Environment or configuration error encountered.") from e
+    except Exception as e:
+        raise RuntimeError("An unexpected error occurred.") from e
 
     reload_db(db_engine)
     define_activities(database)
