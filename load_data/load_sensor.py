@@ -1,19 +1,14 @@
 import io
-import os
 from zipfile import ZipFile
 
 import requests
-from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.exc import ArgumentError, OperationalError, SQLAlchemyError
-from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
 
+from load_data import my_conn
 from load_data.db_model.activity import Activity
 from load_data.db_model.base import Base
 from load_data.db_model.sensor_data import create_sensor_data
 from load_data.db_model.session import Session
-from load_data.db_model.subject import Subject
 
 
 def reload_db(engine):
@@ -21,10 +16,7 @@ def reload_db(engine):
     Base.metadata.create_all(bind=engine)
 
 
-def define_activities(session):
-    subjects = [Subject(id=subject_id) for subject_id in range(1, 11)]
-    session.add_all(subjects)
-
+def define_activities(db):
     activities = [
         (1, "Standing still"),
         (2, "Sitting and relaxing"),
@@ -39,11 +31,9 @@ def define_activities(session):
         (11, "Running"),
         (12, "Jump front & back"),
     ]
-    session.add_all(
-        [Activity(id=act_id, description=desc) for act_id, desc in activities]
-    )
+    db.add_all([Activity(id=act_id, description=desc) for act_id, desc in activities])
 
-    session.commit()
+    db.commit()
 
 
 def download_file_in_memory(url):
@@ -92,23 +82,7 @@ def import_data_from_log(db, subject_id, file):
 
 
 if __name__ == "__main__":
-    try:
-        load_dotenv()
-        DATABASE_URI = os.getenv("DATABASE_URI")
-        if DATABASE_URI is None:
-            raise ValueError("DATABASE_URI not found in environment variables")
-
-        db_engine = create_engine(DATABASE_URI)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
-        database = SessionLocal()
-    except (ArgumentError, OperationalError, SQLAlchemyError) as e:
-        raise RuntimeError(
-            "Database connection error. Please check your DATABASE_URI."
-        ) from e
-    except (EnvironmentError, KeyError, TypeError, ValueError) as e:
-        raise RuntimeError("Environment or configuration error encountered.") from e
-    except Exception as e:
-        raise RuntimeError("An unexpected error occurred.") from e
+    db_engine, database = my_conn.load_engine()
 
     reload_db(db_engine)
     define_activities(database)
