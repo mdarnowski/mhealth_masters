@@ -7,4 +7,3 @@ from load_data.db_model.base import Base
 class Subject(Base):
     __tablename__ = "subject"
     id = Column(Integer, primary_key=True)
-    sessions = relationship("Session", back_populates="subject")

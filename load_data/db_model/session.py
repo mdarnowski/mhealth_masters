@@ -1,7 +1,9 @@
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 
+from load_data.db_model.activity import Activity
 from load_data.db_model.base import Base
+from load_data.db_model.subject import Subject
 
 
 class Session(Base):
@@ -9,6 +11,5 @@ class Session(Base):
     id = Column(Integer, primary_key=True)
     subject_id = Column(Integer, ForeignKey("subject.id"))
     activity_id = Column(Integer, ForeignKey("activity.id"))
-    subject = relationship("Subject", back_populates="sessions")
-    activity = relationship("Activity", back_populates="sessions")
-    sensor_data = relationship("SensorData", back_populates="session")
+    subject = relationship(Subject.__name__)
+    activity = relationship(Activity.__name__)

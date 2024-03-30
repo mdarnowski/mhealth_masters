@@ -2,13 +2,14 @@ from sqlalchemy import Column, Float, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 
 from load_data.db_model.base import Base
+from load_data.db_model.session import Session
 
 
 class SensorData(Base):
     __tablename__ = "sensor_data"
     sequence = Column(Integer, primary_key=True)
     session_id = Column(Integer, ForeignKey("session.id"), primary_key=True)
-    session = relationship("Session", back_populates="sensor_data")
+    session = relationship(Session.__name__)
 
     # Sensor measurement columns
     acceleration_chest_x = Column(Float)
