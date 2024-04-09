@@ -9,8 +9,8 @@ requests
 matplotlib
 scikit-learn
 scipy
-plot_keras_history
 chardet
 keras
 pydot
 seaborn
+IPython

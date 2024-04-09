@@ -82,17 +82,14 @@ def import_data_from_log(db, subject_id, file):
 
 
 if __name__ == "__main__":
-    db_engine, database = my_conn.load_engine()
+    reload_db(my_conn.db_engine)
 
-    reload_db(db_engine)
-    define_activities(database)
+    with my_conn.get_db_session() as database:
+        define_activities(db=database)
+        zip_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00319/MHEALTHDATASET.zip"
+        zip_in_memory = download_file_in_memory(zip_url)
 
-    zip_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00319/MHEALTHDATASET.zip"
-    zip_in_memory = download_file_in_memory(zip_url)
-
-    with ZipFile(zip_in_memory) as zip_ref:
-        for i in tqdm(range(1, 11), desc="Processing log files"):
-            with zip_ref.open(f"MHEALTHDATASET/mHealth_subject{i}.log") as log_file:
-                import_data_from_log(database, subject_id=i, file=log_file)
-
-    database.close()
+        with ZipFile(zip_in_memory) as zip_ref:
+            for i in tqdm(range(1, 11), desc="Processing log files"):
+                with zip_ref.open(f"MHEALTHDATASET/mHealth_subject{i}.log") as log_file:
+                    import_data_from_log(db=database, subject_id=i, file=log_file)
