@@ -4,11 +4,11 @@ from zipfile import ZipFile
 import requests
 from tqdm import tqdm
 
+from db_model.activity import Activity
+from db_model.base import Base
+from db_model.sensor_data import create_sensor_record
+from db_model.session import Session
 from load_data import my_conn
-from load_data.db_model.activity import Activity
-from load_data.db_model.base import Base
-from load_data.db_model.sensor_data import create_sensor_data
-from load_data.db_model.session import Session
 
 
 def reload_db(engine):
@@ -75,7 +75,9 @@ def import_data_from_log(db, subject_id, file):
             sequence += 1
 
         sensor_data_values = [float(value) for value in values[:-1]]
-        sensor_data = create_sensor_data(sequence, session_obj.id, *sensor_data_values)
+        sensor_data = create_sensor_record(
+            sequence, session_obj.id, *sensor_data_values
+        )
         db.add(sensor_data)
 
     db.commit()

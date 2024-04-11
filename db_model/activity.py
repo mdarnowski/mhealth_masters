@@ -1,7 +1,6 @@
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.orm import relationship
 
-from load_data.db_model.base import Base
+from db_model.base import Base
 
 
 class Activity(Base):

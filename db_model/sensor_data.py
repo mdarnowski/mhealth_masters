@@ -1,17 +1,17 @@
 from sqlalchemy import Column, Float, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 
-from load_data.db_model.base import Base
-from load_data.db_model.session import Session
+from db_model.base import Base
+from db_model.session import Session
 
 
-class SensorData(Base):
+class SensorRecord(Base):
     __tablename__ = "sensor_data"
     sequence = Column(Integer, primary_key=True)
     session_id = Column(Integer, ForeignKey("session.id"), primary_key=True)
     session = relationship(Session.__name__)
 
-    # Sensor measurement columns
+    # sensor measurement columns
     acceleration_chest_x = Column(Float)
     acceleration_chest_y = Column(Float)
     acceleration_chest_z = Column(Float)
@@ -37,17 +37,60 @@ class SensorData(Base):
     magnetometer_right_lower_arm_z = Column(Float)
 
 
-def create_sensor_data(sequence, session_id, *data):
-    """
-    Populate the SensorData table with the provided data.
+def get_sensor_columns(incl_acc=True, incl_gyro=True, incl_mag=True, incl_ecg=True):
+    columns = []
 
-    Args:
-        sequence (int): Sequence value for the SensorData.
-        session_id (int): ID of the session associated with the data.
-        data: Variable number of arguments representing sensor data values.
-    """
+    if incl_acc:
+        acceleration_columns = [
+            SensorRecord.acceleration_chest_x,
+            SensorRecord.acceleration_chest_y,
+            SensorRecord.acceleration_chest_z,
+            SensorRecord.acceleration_left_ankle_x,
+            SensorRecord.acceleration_left_ankle_y,
+            SensorRecord.acceleration_left_ankle_z,
+            SensorRecord.acceleration_right_lower_arm_x,
+            SensorRecord.acceleration_right_lower_arm_y,
+            SensorRecord.acceleration_right_lower_arm_z,
+        ]
+        columns.extend(acceleration_columns)
 
-    sensor_data = SensorData(
+    if incl_gyro:
+        gyro_columns = [
+            SensorRecord.gyro_left_ankle_x,
+            SensorRecord.gyro_left_ankle_y,
+            SensorRecord.gyro_left_ankle_z,
+            SensorRecord.gyro_right_lower_arm_x,
+            SensorRecord.gyro_right_lower_arm_y,
+            SensorRecord.gyro_right_lower_arm_z,
+        ]
+        columns.extend(gyro_columns)
+
+    if incl_mag:
+        magnetometer_columns = [
+            SensorRecord.magnetometer_left_ankle_x,
+            SensorRecord.magnetometer_left_ankle_y,
+            SensorRecord.magnetometer_left_ankle_z,
+            SensorRecord.magnetometer_right_lower_arm_x,
+            SensorRecord.magnetometer_right_lower_arm_y,
+            SensorRecord.magnetometer_right_lower_arm_z,
+        ]
+        columns.extend(magnetometer_columns)
+
+    if incl_ecg:
+        ecg_columns = [
+            SensorRecord.ecg_lead_1,
+            SensorRecord.ecg_lead_2,
+        ]
+        columns.extend(ecg_columns)
+
+    if not columns:
+        raise ValueError("At least one type of sensor data must be included.")
+
+    return columns
+
+
+def create_sensor_record(sequence, session_id, *data):
+    sensor_record = SensorRecord(
         sequence=sequence,
         session_id=session_id,
         acceleration_chest_x=data[0],
@@ -74,4 +117,4 @@ def create_sensor_data(sequence, session_id, *data):
         magnetometer_right_lower_arm_y=data[21],
         magnetometer_right_lower_arm_z=data[22],
     )
-    return sensor_data
+    return sensor_record

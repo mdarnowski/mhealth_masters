@@ -1,33 +1,34 @@
 import math
+import random
 
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sqlalchemy import func
 
+from db_model.sensor_data import SensorRecord, get_sensor_columns
+from db_model.session import Session
 from load_data import my_conn
-from load_data.db_model.sensor_data import SensorData
-from load_data.db_model.session import Session
 from load_data.my_conn import get_db_session
 
 
-def get_all_session_ids_with_labels():
+def get_session_ids_with_labels():
     with my_conn.get_db_session() as db:
         sessions = db.query(Session.id, Session.activity_id).all()
         return sessions
 
 
 def fetch_activity_label(db, session_id):
-    return db.query(Session.activity_id).filter(Session.id == session_id).scalar()
+    return db.query(Session.activity_id).filter(Session.id == session_id).scalar() - 1
 
 
 def fetch_all_session_lengths(session_ids):
     lengths = {}
     with get_db_session() as db:
         results = (
-            db.query(SensorData.session_id, func.count().label("total"))
-            .filter(SensorData.session_id.in_(session_ids))
-            .group_by(SensorData.session_id)
+            db.query(SensorRecord.session_id, func.count().label("total"))
+            .filter(SensorRecord.session_id.in_(session_ids))
+            .group_by(SensorRecord.session_id)
             .all()
         )
 
@@ -36,69 +37,48 @@ def fetch_all_session_lengths(session_ids):
     return lengths
 
 
-def calc_steps_per_epoch_efficiently(session_ids, segment_size, batch_size, n_shifts):
+def calc_steps_per_epoch(session_ids, segment_size, batch_size, n_shifts):
     session_lengths = fetch_all_session_lengths(session_ids)
     shift_steps = calc_shift_steps(segment_size, n_shifts)
 
-    total_usable_segments = 0
+    total_segments = 0
     for session_id, length in session_lengths.items():
         for shift in shift_steps:
-            adjusted_length = length - shift
-            if adjusted_length >= segment_size:
-                total_usable_segments += (
-                    adjusted_length - segment_size
-                ) // segment_size + 1
+            fin_len = length - shift
+            if fin_len >= segment_size:
+                total_segments += (fin_len - segment_size) // segment_size
 
-    steps_per_epoch = math.floor(total_usable_segments / batch_size)
+    steps_per_epoch = math.ceil(total_segments / batch_size)
     return steps_per_epoch
 
 
-def get_sensor_data_query(db, session_id):
+def count_features(incl_acc=True, incl_gyro=True, incl_mag=True, incl_ecg=True):
+    columns = get_sensor_columns(
+        incl_acc=incl_acc, incl_gyro=incl_gyro, incl_mag=incl_mag, incl_ecg=incl_ecg
+    )
+    return len(columns)
+
+
+def fetch_session_data(
+    db, session_id, incl_acc=True, incl_gyro=True, incl_mag=True, incl_ecg=True
+):
     query = (
         db.query(
-            SensorData.acceleration_chest_x,
-            SensorData.acceleration_chest_y,
-            SensorData.acceleration_chest_z,
-            SensorData.ecg_lead_1,
-            SensorData.ecg_lead_2,
-            SensorData.acceleration_left_ankle_x,
-            SensorData.acceleration_left_ankle_y,
-            SensorData.acceleration_left_ankle_z,
-            SensorData.gyro_left_ankle_x,
-            SensorData.gyro_left_ankle_y,
-            SensorData.gyro_left_ankle_z,
-            SensorData.magnetometer_left_ankle_x,
-            SensorData.magnetometer_left_ankle_y,
-            SensorData.magnetometer_left_ankle_z,
-            SensorData.acceleration_right_lower_arm_x,
-            SensorData.acceleration_right_lower_arm_y,
-            SensorData.acceleration_right_lower_arm_z,
-            SensorData.gyro_right_lower_arm_x,
-            SensorData.gyro_right_lower_arm_y,
-            SensorData.gyro_right_lower_arm_z,
-            SensorData.magnetometer_right_lower_arm_x,
-            SensorData.magnetometer_right_lower_arm_y,
-            SensorData.magnetometer_right_lower_arm_z,
+            *get_sensor_columns(
+                incl_acc=incl_acc,
+                incl_gyro=incl_gyro,
+                incl_mag=incl_mag,
+                incl_ecg=incl_ecg,
+            )
         )
-        .filter(SensorData.session_id == session_id)
-        .order_by(SensorData.sequence)
+        .filter(SensorRecord.session_id == session_id)
+        .order_by(SensorRecord.sequence)
     )
-    return query
-
-
-def fetch_full_session_data(db, session_id):
-    results = get_sensor_data_query(db, session_id).all()
-    return np.array(results)
+    return np.array(query.all())
 
 
 def calc_shift_steps(segment_size, n_shifts):
-    if n_shifts > 1:
-        shift_interval = segment_size // n_shifts
-        shift_steps = [i * shift_interval for i in range(n_shifts)]
-    else:
-        shift_steps = [0]
-
-    return shift_steps
+    return [i * segment_size // n_shifts for i in range(n_shifts)]
 
 
 def create_dataset(
@@ -107,19 +87,27 @@ def create_dataset(
     batch_size: int,
     n_features: int,
     n_shifts: int = 1,
+    incl_acc: bool = True,
+    incl_gyro: bool = True,
+    incl_mag: bool = True,
+    incl_ecg: bool = True,
 ):
     shift_steps = calc_shift_steps(segment_size, n_shifts)
 
     def data_generator():
+        random.shuffle(ids)
         with my_conn.get_db_session() as db:
+
             for shift in shift_steps:
                 for session_id in ids:
-                    full_session_data = fetch_full_session_data(db, session_id)
-                    label = fetch_activity_label(db, session_id) - 1
-                    for offset in range(shift, len(full_session_data), segment_size):
+                    session_data = fetch_session_data(
+                        db, session_id, incl_acc, incl_gyro, incl_mag, incl_ecg
+                    )
+                    label = fetch_activity_label(db, session_id)
+                    for offset in range(shift, len(session_data), segment_size):
                         end = offset + segment_size
-                        if end <= len(full_session_data):
-                            segment = full_session_data[offset:end]
+                        if end <= len(session_data):
+                            segment = session_data[offset:end]
                             yield segment, label
 
     return (
@@ -135,56 +123,58 @@ def create_dataset(
     )
 
 
-def prepare_train_val_test(
-    segment_size: int,
-    batch_size: int,
-    n_features: int,
-    val_size: float = 0.2,
-    test_size: float = 0.2,
-    n_shifts: int = 1,
-):
-    sessions_with_labels = get_all_session_ids_with_labels()
-    session_ids, activity_ids = zip(*sessions_with_labels)
+def split_dataset(ids, labels, test_size, val_size, random_state=42):
     train_val_ids, test_ids, train_val_labels, _ = train_test_split(
-        session_ids,
-        activity_ids,
-        test_size=test_size,
-        random_state=42,
-        stratify=activity_ids,
+        ids, labels, test_size=test_size, random_state=random_state, stratify=labels
     )
     train_ids, val_ids, _, _ = train_test_split(
         train_val_ids,
         train_val_labels,
         test_size=val_size / (1 - test_size),
-        random_state=42,
+        random_state=random_state,
         stratify=train_val_labels,
     )
+    return train_ids, val_ids, test_ids
 
-    train_steps_nr = calc_steps_per_epoch_efficiently(
-        train_ids, segment_size, batch_size, n_shifts=n_shifts
+
+def prepare_train_val_test(
+    segment_size: int,
+    batch_size: int,
+    val_size: float = 0.1,
+    test_size: float = 0.1,
+    n_shifts: int = 1,
+    incl_acc: bool = True,
+    incl_gyro: bool = True,
+    incl_mag: bool = True,
+    incl_ecg: bool = True,
+):
+    session_ids, activity_ids = zip(*get_session_ids_with_labels())
+    train_ids, val_ids, test_ids = split_dataset(
+        session_ids, activity_ids, test_size, val_size
     )
-    val_steps_nr = calc_steps_per_epoch_efficiently(
-        val_ids, segment_size, batch_size, n_shifts=n_shifts
-    )
-    test_steps_nr = calc_steps_per_epoch_efficiently(
-        test_ids, segment_size, batch_size, n_shifts=n_shifts
-    )
+
+    train_steps = calc_steps_per_epoch(train_ids, segment_size, batch_size, n_shifts)
+    val_steps = calc_steps_per_epoch(val_ids, segment_size, batch_size, n_shifts)
+    test_steps = calc_steps_per_epoch(test_ids, segment_size, batch_size, n_shifts)
+
+    n_features = count_features(incl_acc, incl_gyro, incl_mag, incl_ecg)
 
     train_dataset = create_dataset(
-        list(train_ids), segment_size, batch_size, n_features, n_shifts
+        train_ids, segment_size, batch_size, n_features, n_shifts
     ).repeat()
     val_dataset = create_dataset(
-        list(val_ids), segment_size, batch_size, n_features, n_shifts
+        val_ids, segment_size, batch_size, n_features, n_shifts
     ).repeat()
     test_dataset = create_dataset(
-        list(test_ids), segment_size, batch_size, n_features, n_shifts
-    )
+        test_ids, segment_size, batch_size, n_features, n_shifts
+    ).repeat()
 
     return (
         train_dataset,
         val_dataset,
         test_dataset,
-        train_steps_nr,
-        val_steps_nr,
-        test_steps_nr,
+        train_steps,
+        val_steps,
+        test_steps,
+        n_features,
     )

@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from load_data.db_model.activity import Activity
-from load_data.db_model.sensor_data import SensorData
-from load_data.db_model.session import Session
+from db_model.activity import Activity
+from db_model.sensor_data import SensorRecord
+from db_model.session import Session
 
 load_dotenv()
 database_uri = os.getenv("DATABASE_URI")
@@ -40,12 +40,12 @@ def load_sensor_ete_df():
     with get_db_session() as db:
         query = (
             db.query(
-                SensorData,
+                SensorRecord,
                 Session.subject_id,
                 Session.activity_id,
                 Activity.description,
             )
-            .join(Session, SensorData.session_id == Session.id)
+            .join(Session, SensorRecord.session_id == Session.id)
             .join(Activity)
         )
 
