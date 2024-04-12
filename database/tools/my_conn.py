@@ -1,14 +1,9 @@
 import os
 from contextlib import contextmanager
 
-import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
-from db_model.activity import Activity
-from db_model.sensor_data import SensorRecord
-from db_model.session import Session
 
 load_dotenv()
 database_uri = os.getenv("DATABASE_URI")
@@ -34,23 +29,3 @@ def get_db_session():
 
 def load_db():
     return SessionLocal()
-
-
-def load_sensor_ete_df():
-    with get_db_session() as db:
-        query = (
-            db.query(
-                SensorRecord,
-                Session.subject_id,
-                Session.activity_id,
-                Activity.description,
-            )
-            .join(Session, SensorRecord.session_id == Session.id)
-            .join(Activity)
-        )
-
-        df_sensor_data = pd.read_sql(query.statement, db.bind)
-        df_sensor_data.drop("sequence", axis=1, inplace=True)
-
-        db.close()
-        return df_sensor_data

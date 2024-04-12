@@ -1,8 +1,8 @@
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 
-from db_model.activity import Activity
-from db_model.base import Base
+from database.model.activity import Activity
+from database.model.base import Base
 
 
 class Session(Base):
