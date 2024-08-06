@@ -1,4 +1,4 @@
-tensorflow
+tensorflow[and-cuda]
 SQLAlchemy
 pandas
 numpy
@@ -14,3 +14,8 @@ keras
 pydot
 seaborn
 IPython
+jupyter
+sqlalchemy_schemadisplay
+tensorrt
+optuna
+plotly
