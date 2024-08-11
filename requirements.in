@@ -8,6 +8,7 @@ tqdm
 requests
 matplotlib
 scikit-learn
+scikit-optimize
 scipy
 chardet
 keras
@@ -18,4 +19,9 @@ jupyter
 sqlalchemy_schemadisplay
 tensorrt
 optuna
+optuna-integration
 plotly
+plot_keras_history
+kaleido
+silence_tensorflow
+cmaes

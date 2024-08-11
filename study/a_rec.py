@@ -1,9 +1,13 @@
 import math
 
+from silence_tensorflow import silence_tensorflow
+
+silence_tensorflow("WARNING")  # clean notebooks
 import tensorflow as tf
 from keras import Input, Sequential
 from keras.src.callbacks import EarlyStopping
 from keras.src.layers import Dense
+from keras.src.metrics import SparseTopKCategoricalAccuracy
 from keras.src.optimizers import Adam
 from sklearn.model_selection import train_test_split
 
@@ -36,6 +40,7 @@ class ActivityRecognitionModel(Sequential):
         batch_size,
         n_shifts=1,
         l_rate=0.001,
+        epochs=30,
         *args,
         **kwargs,
     ):
@@ -51,8 +56,9 @@ class ActivityRecognitionModel(Sequential):
             self.n_classes = act.count_activity(db)
 
         self.l_rate = l_rate
+        self.epochs = epochs
 
-    def train_model(self):
+    def train_model(self, callbacks=None, max_epochs=None, verbose=1):
         train, train_steps = self._create_dataset(self.train_ids)
         val, val_steps = self._create_dataset(self.val_ids)
 
@@ -63,13 +69,22 @@ class ActivityRecognitionModel(Sequential):
             min_delta=0.01,
         )
 
+        if callbacks is not None:
+            callbacks = [early_stopping] + callbacks
+        else:
+            callbacks = [early_stopping]
+
+        if max_epochs is None:
+            max_epochs = self.epochs
+
         history = self.fit(
             train,
             steps_per_epoch=train_steps,
             validation_data=val,
             validation_steps=val_steps,
-            callbacks=[early_stopping],
-            epochs=20,
+            callbacks=callbacks,
+            epochs=max_epochs,
+            verbose=verbose,
         )
 
         return history
@@ -77,15 +92,21 @@ class ActivityRecognitionModel(Sequential):
     def evaluate_model(self, verbose=1):
         test_dataset, test_steps = self._create_dataset(self.test_ids)
         results = self.evaluate(test_dataset, steps=test_steps, verbose=verbose)
-        test_loss, test_accuracy = results[0], results[1]
-        tf.print(f"Loss: {test_loss:.4f}, Accuracy: {test_accuracy:.4f}")
 
-    def compile_model(self):
-        optimizer = Adam(learning_rate=self.l_rate)
+        metrics_names = ["loss", "sparse_categorical_accuracy", "sparse_top_3_accuracy"]
+
+        return dict(zip(metrics_names, results))
+
+    def compile_model(self, optimizer=None):
+        if optimizer is None:
+            optimizer = Adam(learning_rate=self.l_rate)
         self.compile(
             optimizer=optimizer,
             loss="sparse_categorical_crossentropy",
-            metrics=["sparse_categorical_accuracy"],
+            metrics=[
+                "sparse_categorical_accuracy",
+                SparseTopKCategoricalAccuracy(k=3, name="sparse_top_3_accuracy"),
+            ],
         )
 
     def add_input_layer(self):

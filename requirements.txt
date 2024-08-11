@@ -51,12 +51,16 @@ chardet==5.2.0
     # via -r requirements.in
 charset-normalizer==3.3.2
     # via requests
+cmaes==0.11.0
+    # via -r requirements.in
 colorlog==6.8.2
     # via optuna
 comm==0.2.2
     # via
     #   ipykernel
     #   ipywidgets
+compress-json==1.1.0
+    # via sanitize-ml-labels
 contourpy==1.2.1
     # via matplotlib
 cycler==0.12.1
@@ -132,7 +136,9 @@ jinja2==3.1.3
     #   jupyterlab-server
     #   nbconvert
 joblib==1.4.0
-    # via scikit-learn
+    # via
+    #   scikit-learn
+    #   scikit-optimize
 json5==0.9.25
     # via jupyterlab-server
 jsonpointer==2.4
@@ -189,6 +195,8 @@ jupyterlab-server==2.26.0
     #   notebook
 jupyterlab-widgets==3.0.10
     # via ipywidgets
+kaleido==0.2.1
+    # via -r requirements.in
 keras==3.2.1
     # via
     #   -r requirements.in
@@ -212,6 +220,7 @@ markupsafe==2.1.5
 matplotlib==3.8.4
     # via
     #   -r requirements.in
+    #   plot-keras-history
     #   seaborn
 matplotlib-inline==0.1.7
     # via
@@ -249,6 +258,7 @@ notebook-shim==0.2.4
 numpy==1.26.4
     # via
     #   -r requirements.in
+    #   cmaes
     #   contourpy
     #   h5py
     #   keras
@@ -258,6 +268,7 @@ numpy==1.26.4
     #   optuna
     #   pandas
     #   scikit-learn
+    #   scikit-optimize
     #   scipy
     #   seaborn
     #   tensorboard
@@ -301,6 +312,10 @@ opt-einsum==3.3.0
 optree==0.11.0
     # via keras
 optuna==3.6.1
+    # via
+    #   -r requirements.in
+    #   optuna-integration
+optuna-integration==3.6.0
     # via -r requirements.in
 overrides==7.7.0
     # via jupyter-server
@@ -316,10 +331,12 @@ packaging==24.0
     #   plotly
     #   qtconsole
     #   qtpy
+    #   scikit-optimize
     #   tensorflow
 pandas==2.2.2
     # via
     #   -r requirements.in
+    #   plot-keras-history
     #   seaborn
 pandocfilters==1.5.1
     # via nbconvert
@@ -333,6 +350,8 @@ pillow==10.3.0
     #   sqlalchemy-schemadisplay
 platformdirs==4.2.0
     # via jupyter-core
+plot-keras-history==1.1.36
+    # via -r requirements.in
 plotly==5.23.0
     # via -r requirements.in
 prometheus-client==0.20.0
@@ -355,6 +374,8 @@ ptyprocess==0.7.0
     #   terminado
 pure-eval==0.2.2
     # via stack-data
+pyaml==24.7.0
+    # via scikit-optimize
 pycparser==2.22
     # via cffi
 pydot==2.0.0
@@ -388,6 +409,7 @@ pyyaml==6.0.1
     # via
     #   jupyter-events
     #   optuna
+    #   pyaml
 pyzmq==26.0.0
     # via
     #   ipykernel
@@ -423,16 +445,26 @@ rpds-py==0.18.0
     # via
     #   jsonschema
     #   referencing
+sanitize-ml-labels==1.1.0
+    # via plot-keras-history
 scikit-learn==1.4.2
+    # via
+    #   -r requirements.in
+    #   scikit-optimize
+scikit-optimize==0.10.2
     # via -r requirements.in
 scipy==1.13.0
     # via
     #   -r requirements.in
+    #   plot-keras-history
     #   scikit-learn
+    #   scikit-optimize
 seaborn==0.13.2
     # via -r requirements.in
 send2trash==1.8.3
     # via jupyter-server
+silence-tensorflow==1.2.2
+    # via -r requirements.in
 six==1.16.0
     # via
     #   asttokens
