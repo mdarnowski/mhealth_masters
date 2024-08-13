@@ -1,18 +1,8 @@
-import warnings
-
-from optuna.exceptions import ExperimentalWarning
-from silence_tensorflow import silence_tensorflow
-
-# clean notebooks
-warnings.filterwarnings("ignore", category=ExperimentalWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-silence_tensorflow("WARNING")
-
 import optuna
 from keras import layers, optimizers
 
-# from optuna_integration import KerasPruningCallback
 from study.a_rec import ActivityRecognitionModel
+from util import vis
 
 default_params = {
     "segment_size": 75,
@@ -31,78 +21,8 @@ default_params = {
     "use_batch_norm": False,
     "pooling_type": "max",
     "pool_after_each": True,
-    "kernel_size": 3,
+    "kernel_size": [3],
     "pool_size": 2,
-}
-
-# Hyperparameter set 1
-hyperparameter_set_1 = {
-    "segment_size": 80,
-    "batch_size": 50,
-    "optimizer": lambda trial: trial.suggest_categorical(
-        "optimizer", ["adam", "sgd", "rmsprop", "adamax", "nadam"]
-    ),
-    "n_shifts": 5,
-    "l_rate": lambda trial: trial.suggest_float("l_rate", 1e-4, 1e-2, log=True),
-    "n_conv_layers": lambda trial: trial.suggest_int("n_conv_layers", 1, 3),
-    "conv_filters": lambda trial, i: trial.suggest_int(
-        f"conv_filters_{i}", 32, 128, step=32
-    ),
-    # 'kernel_size': 3,
-    "recurrent_type": lambda trial: trial.suggest_categorical(
-        "recurrent_type", ["GRU", "LSTM"]
-    ),
-    "n_recurrent_layers": lambda trial: trial.suggest_int("n_recurrent_layers", 1, 3),
-    "recurrent_units": lambda trial, i: trial.suggest_int(
-        f"recurrent_units_{i}", 32, 128, step=32
-    ),
-    "n_dense_layers": lambda trial: trial.suggest_int("n_dense_layers", 0, 1),
-    "dense_units": lambda trial, i: trial.suggest_int(
-        f"dense_units_{i}", 64, 256, step=64
-    ),
-    "dropout_rate": lambda trial: trial.suggest_float("dropout_rate", 0.2, 0.5),
-    "use_batch_norm": lambda trial: trial.suggest_categorical(
-        "use_batch_norm", [True, False]
-    ),
-    "pooling_type": lambda trial: trial.suggest_categorical(
-        "pooling_type", ["max", "average"]
-    ),
-    "pool_after_each": lambda trial: trial.suggest_categorical(
-        "pool_after_each", [True, False]
-    ),
-}
-
-# Example hyperparameter set 2
-hyperparameter_set_2 = {
-    "segment_size": 100,  # Fixed value
-    "batch_size": lambda trial: trial.suggest_int("batch_size", 32, 256, step=32),
-    "n_shifts": 7,  # Fixed value
-    "optimizer": lambda trial: trial.suggest_categorical(
-        "optimizer", ["adam", "rmsprop"]
-    ),
-    "l_rate": 1e-3,  # Fixed value
-    "n_conv_layers": 2,  # Fixed value
-    "conv_filters": lambda trial, i: trial.suggest_int(
-        f"conv_filters_{i}", 64, 256, step=64
-    ),
-    "kernel_size": 3,  # Fixed value for kernel size
-    "n_recurrent_layers": 2,  # Updated to n_recurrent_layers
-    "recurrent_units": [
-        128,
-        64,
-    ],  # Fixed value (changed from lstm_units to recurrent_units)
-    "n_dense_layers": lambda trial: trial.suggest_int("n_dense_layers", 1, 3),
-    "dense_units": lambda trial, i: trial.suggest_int(
-        f"dense_units_{i}", 128, 512, step=128
-    ),
-    "dropout_rate": lambda trial: trial.suggest_float(
-        "dropout_rate", 0.3, 0.7, step=0.1
-    ),
-    "use_batch_norm": True,  # Fixed value
-    "pooling_type": lambda trial: trial.suggest_categorical(
-        "pooling_type", ["max", "average"]
-    ),
-    "pool_after_each": False,  # Fixed value
 }
 
 
@@ -119,7 +39,11 @@ class ActivityRecognitionOptunaStudy:
         """Helper function to get a parameter from suggestions or defaults."""
         suggestion = self.hyperparameter_suggestions.get(param_name)
         if callable(suggestion):
-            if param_name in ["conv_filters", "recurrent_units", "dense_units"]:
+            if param_name in ["conv_filters", "kernel_size"]:
+                num_conv_layers = self._get_param(trial, "n_conv_layers", 0)
+                # Ensure the list is correctly sized based on the number of convolutional layers
+                return [suggestion(trial, i) for i in range(num_conv_layers)]
+            elif param_name in ["recurrent_units", "dense_units"]:
                 num_layers_param = "n_" + param_name.split("_")[0] + "_layers"
                 num_layers = self._get_param(trial, num_layers_param, 0)
                 return [suggestion(trial, i) for i in range(num_layers)]
@@ -165,6 +89,9 @@ class ActivityRecognitionOptunaStudy:
             "conv_filters": self._get_param(
                 trial, "conv_filters", default_params["conv_filters"]
             ),
+            "kernel_size": self._get_param(
+                trial, "kernel_size", default_params["kernel_size"]
+            ),
             "use_batch_norm": self._get_param(
                 trial, "use_batch_norm", default_params["use_batch_norm"]
             ),
@@ -174,14 +101,14 @@ class ActivityRecognitionOptunaStudy:
             "pool_after_each": self._get_param(
                 trial, "pool_after_each", default_params["pool_after_each"]
             ),
-            "kernel_size": self._get_param(
-                trial, "kernel_size", default_params["kernel_size"]
+            "pool_size": self._get_param(
+                trial, "pool_size", default_params["pool_size"]
             ),
-            "pool_size": default_params["pool_size"],
         }
         return params
 
     def _build_model(self, params):
+
         model = ActivityRecognitionModel(
             segment_size=params["segment_size"],
             batch_size=params["batch_size"],
@@ -194,34 +121,29 @@ class ActivityRecognitionOptunaStudy:
             model.add(
                 layers.Conv1D(
                     filters=params["conv_filters"][i],
-                    kernel_size=params["kernel_size"],
+                    kernel_size=params["kernel_size"][
+                        i
+                    ],  # Different kernel sizes for each layer
                     padding="same",
                 )
             )
             if params["use_batch_norm"]:
                 model.add(layers.BatchNormalization())
             model.add(layers.ReLU())
+            model.add(layers.Dropout(params["dropout_rate"]))
             if params["pool_after_each"]:
                 if params["pooling_type"] == "max":
-                    model.add(
-                        layers.MaxPool1D(pool_size=params["pool_size"])
-                    )  # Use fixed pool size from params
+                    model.add(layers.MaxPool1D(pool_size=params["pool_size"]))
                 else:
-                    model.add(
-                        layers.AveragePooling1D(pool_size=params["pool_size"])
-                    )  # Use fixed pool size from params
+                    model.add(layers.AveragePooling1D(pool_size=params["pool_size"]))
 
         if not params["pool_after_each"] and params["n_conv_layers"] > 0:
             if params["pooling_type"] == "max":
-                model.add(
-                    layers.MaxPool1D(pool_size=params["pool_size"])
-                )  # Use fixed pool size from params
+                model.add(layers.MaxPool1D(pool_size=params["pool_size"]))
             else:
-                model.add(
-                    layers.AveragePooling1D(pool_size=params["pool_size"])
-                )  # Use fixed pool size from params
+                model.add(layers.AveragePooling1D(pool_size=params["pool_size"]))
 
-        for i in range(params["n_recurrent_layers"]):  # Updated to n_recurrent_layers
+        for i in range(params["n_recurrent_layers"]):
             return_sequences = i < params["n_recurrent_layers"] - 1
             if params["recurrent_type"] == "LSTM":
                 model.add(
@@ -229,23 +151,17 @@ class ActivityRecognitionOptunaStudy:
                         units=params["recurrent_units"][i],
                         return_sequences=return_sequences,
                     )
-                )  # Use units=params['recurrent_units'][i]
+                )
             else:
                 model.add(
                     layers.GRU(
                         units=params["recurrent_units"][i],
                         return_sequences=return_sequences,
                     )
-                )  # Use units=params['recurrent_units'][i]
-            if params["use_batch_norm"]:
-                model.add(layers.BatchNormalization())
+                )
 
         for i in range(params["n_dense_layers"]):
-            model.add(
-                layers.Dense(units=params["dense_units"][i], activation="relu")
-            )  # Use units=params['dense_units'][i]
-            if params["use_batch_norm"]:
-                model.add(layers.BatchNormalization())
+            model.add(layers.Dense(units=params["dense_units"][i], activation="relu"))
             model.add(layers.Dropout(params["dropout_rate"]))
 
         model.add_output_layer()
@@ -274,7 +190,6 @@ class ActivityRecognitionOptunaStudy:
             print(f"Trial {trial.number} failed due to: {e}")
             return 0
 
-        # pruning_callback = KerasPruningCallback(trial, 'val_sparse_categorical_accuracy')
         history = model.train_model(verbose=0)
         val_accuracy = max(history.history["val_sparse_categorical_accuracy"])
         return val_accuracy
@@ -286,16 +201,41 @@ class ActivityRecognitionOptunaStudy:
 
     def recreate_model_from_study(self, study):
         best_params = study.best_params
-        filled_params = {**default_params, **best_params}
-        for param in ["recurrent_units", "conv_filters", "dense_units"]:
-            num_layers_param = "n_" + param.split("_")[0] + "_layers"
-            if num_layers_param in filled_params:
-                num_layers = filled_params[num_layers_param]
-                filled_params[param] = [
-                    filled_params.get(f"{param}_{i}", default_params[param][i])
-                    for i in range(num_layers)
-                ]
-            else:
-                filled_params[param] = default_params[param]
+
+        # Initialize filled_params with default parameters
+        filled_params = {**default_params}
+
+        # First, ensure fixed hyperparameters from hyperparameter_suggestions are included
+        for param_name, suggestion in self.hyperparameter_suggestions.items():
+            if param_name not in filled_params or not isinstance(
+                filled_params[param_name], list
+            ):
+                if callable(suggestion):
+                    # Skip callable as they are handled by Optuna
+                    continue
+                else:
+                    filled_params[param_name] = suggestion
+
+        # Process and fill layer-specific parameters like recurrent_units, conv_filters, kernel_size, and dense_units
+        for param_prefix in [
+            "recurrent_units",
+            "conv_filters",
+            "kernel_size",
+            "dense_units",
+        ]:
+            param_list = []
+            layer_index = 0
+            while f"{param_prefix}_{layer_index}" in best_params:
+                param_list.append(best_params[f"{param_prefix}_{layer_index}"])
+                layer_index += 1
+
+            # If we found any layer-specific params, update filled_params
+            if param_list:
+                filled_params[param_prefix] = param_list
+                filled_params[f"n_{param_prefix.split('_')[0]}_layers"] = len(
+                    param_list
+                )
+
+        filled_params = {**filled_params, **best_params}
 
         return self._build_model(filled_params)
