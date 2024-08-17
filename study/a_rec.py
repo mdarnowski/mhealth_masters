@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 
 from silence_tensorflow import silence_tensorflow
 
@@ -18,18 +19,42 @@ from database.tools import my_conn
 
 
 def _split_dataset(test_size=0.1, val_size=0.1, seed=42):
-    ids, labels = ses.get_session_label_ids()
-    train_val_ids, test_ids, train_val_labels, _ = train_test_split(
-        ids, labels, test_size=test_size, stratify=labels, random_state=seed
+    session_ids, labels, subject_ids = ses.get_session_label_ids()
+
+    subject_to_sessions = defaultdict(list)
+    subject_to_labels = defaultdict(list)
+
+    for session_id, label, subject_id in zip(session_ids, labels, subject_ids):
+        subject_to_sessions[subject_id].append(session_id)
+        subject_to_labels[subject_id].append(label)
+
+    unique_subjects = list(subject_to_sessions.keys())
+    train_val_subjects, test_subjects = train_test_split(
+        unique_subjects, test_size=test_size, random_state=seed
     )
-    train_ids, val_ids, _, _ = train_test_split(
-        train_val_ids,
-        train_val_labels,
-        test_size=val_size / (1 - test_size),
-        stratify=train_val_labels,
-        random_state=seed,
+
+    train_subjects, val_subjects = train_test_split(
+        train_val_subjects, test_size=val_size / (1 - test_size), random_state=seed
     )
-    label_dict = dict(zip(ids, labels))
+
+    train_ids = [
+        session_id
+        for subject in train_subjects
+        for session_id in subject_to_sessions[subject]
+    ]
+    val_ids = [
+        session_id
+        for subject in val_subjects
+        for session_id in subject_to_sessions[subject]
+    ]
+    test_ids = [
+        session_id
+        for subject in test_subjects
+        for session_id in subject_to_sessions[subject]
+    ]
+
+    label_dict = dict(zip(session_ids, labels))
+
     return train_ids, val_ids, test_ids, label_dict
 
 
@@ -41,6 +66,7 @@ class ActivityRecognitionModel(Sequential):
         n_shifts=1,
         l_rate=0.001,
         epochs=30,
+        optimizer_name="adam",
         *args,
         **kwargs,
     ):
@@ -55,8 +81,18 @@ class ActivityRecognitionModel(Sequential):
         with my_conn.get_db_session() as db:
             self.n_classes = act.count_activity(db)
 
-        self.l_rate = l_rate
         self.epochs = epochs
+
+        if optimizer_name == "adam":
+            self.optimizer = Adam(learning_rate=l_rate)
+        elif optimizer_name == "sgd":
+            self.optimizer = tf.keras.optimizers.SGD(learning_rate=l_rate)
+        elif optimizer_name == "rmsprop":
+            self.optimizer = tf.keras.optimizers.RMSprop(learning_rate=l_rate)
+        elif optimizer_name == "adamax":
+            self.optimizer = tf.keras.optimizers.Adamax(learning_rate=l_rate)
+        elif optimizer_name == "nadam":
+            self.optimizer = tf.keras.optimizers.Nadam(learning_rate=l_rate)
 
     def train_model(self, callbacks=None, max_epochs=None, verbose=1):
         train, train_steps = self._create_dataset(self.train_ids)
@@ -97,11 +133,10 @@ class ActivityRecognitionModel(Sequential):
 
         return dict(zip(metrics_names, results))
 
-    def compile_model(self, optimizer=None):
-        if optimizer is None:
-            optimizer = Adam(learning_rate=self.l_rate)
+    def compile_model(self):
+        # Compile the model with the selected optimizer
         self.compile(
-            optimizer=optimizer,
+            optimizer=self.optimizer,
             loss="sparse_categorical_crossentropy",
             metrics=[
                 "sparse_categorical_accuracy",

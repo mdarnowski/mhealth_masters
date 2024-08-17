@@ -1,3 +1,5 @@
+import io
+
 import numpy as np
 import optuna.visualization as opt_vis
 import plotly.io as pio
@@ -6,6 +8,8 @@ from IPython.display import Image
 from jupyter_server.services.config import ConfigManager
 from keras.src.utils import model_to_dot
 from matplotlib import pyplot as plt
+from PIL import Image as PILImage
+from plot_keras_history import plot_history
 
 cm = ConfigManager()
 cm.update(
@@ -103,6 +107,9 @@ def plot_evaluation_results(
     colors.reverse()
 
     fig, ax = plt.subplots(figsize=(6, 2))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
     y_positions = np.arange(len(metrics))
     bars = ax.barh(
         y_positions, scaled_values, color=colors[: len(metrics)], align="center"
@@ -130,4 +137,29 @@ def plot_evaluation_results(
     ax.set_title(title, pad=20, fontsize=14)
 
     plt.tight_layout()
+    plt.show()
+
+
+def plot_val_history(history, title="Optimized Model Training History"):
+    plot_history(history, title=title)
+
+    for ax in plt.gcf().get_axes():
+        handles, labels = ax.get_legend_handles_labels()
+        new_labels = [label.replace("Test", "Validation") for label in labels]
+        ax.legend(handles, new_labels)
+
+    plt.show()
+
+
+def show_model_from_console(model):
+    """for debugging"""
+    img = get_model_vis(model)
+    pil_img = PILImage.open(io.BytesIO(img.data))
+    width, height = pil_img.size
+
+    figsize = (width / 100, height / 100)
+    plt.figure(figsize=figsize)
+
+    plt.imshow(pil_img)
+    plt.axis("off")
     plt.show()
