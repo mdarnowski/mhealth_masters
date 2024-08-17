@@ -167,3 +167,4 @@ cython_debug/
 *.run.xml
 *.gz
 *.toc
+/pictures/
