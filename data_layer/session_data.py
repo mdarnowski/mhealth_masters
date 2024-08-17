@@ -8,9 +8,9 @@ from database.tools.my_conn import get_db_session
 
 def get_session_label_ids():
     with my_conn.get_db_session() as db:
-        sessions = db.query(Session.id, Session.activity_id).all()
-        session_ids, activity_ids = zip(*sessions)
-        return session_ids, activity_ids
+        sessions = db.query(Session.id, Session.activity_id, Session.subject_id).all()
+        session_ids, activity_ids, subject_ids = zip(*sessions)
+        return session_ids, activity_ids, subject_ids
 
 
 def fetch_all_session_lengths(session_ids):
