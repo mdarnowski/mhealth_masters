@@ -6,7 +6,7 @@ from nbformat import read
 from PIL import Image as PILImage
 
 root_dir = "../"
-output_dir = "../pictures"
+output_dir = "../pics"
 
 
 def clear_png_files():
