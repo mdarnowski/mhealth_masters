@@ -1,18 +1,13 @@
-import io
 import warnings
 
 from optuna.exceptions import ExperimentalWarning
 from silence_tensorflow import silence_tensorflow
 
-# clean notebooks
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 silence_tensorflow("WARNING")
 
-
-import matplotlib.pyplot as plt
 from IPython.display import display
-from plot_keras_history import plot_history
 
 from study.hyper_study import ActivityRecognitionOptunaStudy
 from util import vis
@@ -20,7 +15,13 @@ from util.vis import plot_evaluation_results
 
 
 def perform_study_show_graphs(
-    hyperparameter_set, n_trials=50, epochs=10, sampler=None, optimize_for_loss=True
+    hyperparameter_set,
+    n_trials=50,
+    epochs=10,
+    sampler=None,
+    optimize_for_loss=True,
+    use_lr_scheduler=False,
+    use_pruner=False,
 ):
     study = ActivityRecognitionOptunaStudy(
         epochs=epochs,
@@ -28,6 +29,8 @@ def perform_study_show_graphs(
         n_trials=n_trials,
         sampler=sampler,
         optimize_for_loss=optimize_for_loss,
+        use_lr_scheduler=use_lr_scheduler,
+        use_pruner=use_pruner,
     )
 
     best_model = study.perform_trials()

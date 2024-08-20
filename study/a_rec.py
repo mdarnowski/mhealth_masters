@@ -6,7 +6,7 @@ from silence_tensorflow import silence_tensorflow
 silence_tensorflow("WARNING")  # clean notebooks
 import tensorflow as tf
 from keras import Input, Sequential
-from keras.src.callbacks import EarlyStopping
+from keras.src.callbacks import Callback, EarlyStopping, ReduceLROnPlateau
 from keras.src.layers import Dense
 from keras.src.metrics import SparseTopKCategoricalAccuracy
 from keras.src.optimizers import Adam
@@ -67,15 +67,19 @@ class ActivityRecognitionModel(Sequential):
         l_rate=0.001,
         epochs=30,
         optimizer_name="adam",
+        use_lr_scheduler=False,
+        scheduler_factor=0.5,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
+        self.use_lr_scheduler = use_lr_scheduler
         self.segment_size = segment_size
         self.batch_size = batch_size
         self.n_shifts = n_shifts
         self.n_features = len(sen.get_sensor_columns())
+        self.scheduler_factor = scheduler_factor
 
         self.train_ids, self.val_ids, self.test_ids, self.label_dict = _split_dataset()
         with my_conn.get_db_session() as db:
@@ -94,7 +98,7 @@ class ActivityRecognitionModel(Sequential):
         elif optimizer_name == "nadam":
             self.optimizer = tf.keras.optimizers.Nadam(learning_rate=l_rate)
 
-    def train_model(self, callbacks=None, max_epochs=None, verbose=1):
+    def train_model(self, callbacks: list[Callback] = None, max_epochs=None, verbose=1):
         train, train_steps = self._create_dataset(self.train_ids)
         val, val_steps = self._create_dataset(self.val_ids)
 
@@ -109,6 +113,16 @@ class ActivityRecognitionModel(Sequential):
             callbacks = [early_stopping] + callbacks
         else:
             callbacks = [early_stopping]
+
+        if self.use_lr_scheduler:
+            lr_scheduler = ReduceLROnPlateau(
+                monitor="val_loss",
+                factor=self.scheduler_factor,
+                patience=1,
+                min_lr=1e-6,
+            )
+
+            callbacks.append(lr_scheduler)
 
         if max_epochs is None:
             max_epochs = self.epochs
@@ -134,7 +148,6 @@ class ActivityRecognitionModel(Sequential):
         return dict(zip(metrics_names, results))
 
     def compile_model(self):
-        # Compile the model with the selected optimizer
         self.compile(
             optimizer=self.optimizer,
             loss="sparse_categorical_crossentropy",

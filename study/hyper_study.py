@@ -1,7 +1,11 @@
+import itertools
+
 import optuna
 from keras import layers
+from optuna_integration import KerasPruningCallback
 
 from study.a_rec import ActivityRecognitionModel
+from util.endless_list import EndlessList
 
 default_params = {
     "segment_size": 50,
@@ -11,17 +15,18 @@ default_params = {
     "l_rate": 1e-3,
     "recurrent_type": "GRU",
     "n_recurrent_layers": 1,
-    "recurrent_units": [128],
+    "recurrent_units": EndlessList(128),
     "n_dense_layers": 0,
-    "dense_units": [128],
-    "dropout_rates": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "dense_units": EndlessList(128),
+    "dropout_rates": EndlessList(0.0),
     "n_conv_layers": 0,
-    "conv_filters": [32],
+    "conv_filters": EndlessList(32),
     "use_batch_norm": False,
     "pooling_type": "max",
     "pool_after_each": True,
-    "kernel_size": [3, 3, 3, 3],
+    "kernel_size": EndlessList(3),
     "pool_size": 2,
+    "scheduler_factor": 0.5,
 }
 
 
@@ -33,6 +38,8 @@ class ActivityRecognitionOptunaStudy:
         n_trials=50,
         sampler=None,
         optimize_for_loss=False,
+        use_lr_scheduler=False,
+        use_pruner=False,
     ):
         self.best_history = None
         self.study = None
@@ -43,6 +50,8 @@ class ActivityRecognitionOptunaStudy:
         self.best_model = None
         self.optimize_for_loss = optimize_for_loss
         self.best_val_metric = float("inf") if optimize_for_loss else -float("inf")
+        self.use_lr_scheduler = use_lr_scheduler
+        self.use_pruner = use_pruner
 
     def _get_param(self, trial, param_name, default_value):
         """Helper function to get a parameter from suggestions or defaults."""
@@ -123,6 +132,9 @@ class ActivityRecognitionOptunaStudy:
             "pool_size": self._get_param(
                 trial, "pool_size", default_params["pool_size"]
             ),
+            "scheduler_factor": self._get_param(
+                trial, "scheduler_factor", default_params["scheduler_factor"]
+            ),
         }
         return params
 
@@ -137,9 +149,11 @@ class ActivityRecognitionOptunaStudy:
             segment_size=params["segment_size"],
             batch_size=params["batch_size"],
             n_shifts=params["n_shifts"],
-            epochs=self.epochs,
             optimizer_name=params["optimizer"],
             l_rate=params["l_rate"],
+            use_lr_scheduler=self.use_lr_scheduler,
+            scheduler_factor=params["scheduler_factor"],
+            epochs=self.epochs,
         )
         model.add_input_layer()
 
@@ -208,7 +222,13 @@ class ActivityRecognitionOptunaStudy:
             print(f"Trial {trial.number} failed due to: {e}")
             return float("inf") if self.optimize_for_loss else 0
 
-        history = model.train_model(verbose=0)
+        var = KerasPruningCallback(
+            monitor="val_sparse_categorical_accuracy", trial=trial, interval=3
+        )
+
+        if self.use_pruner:
+            history = model.train_model(verbose=0, callbacks=[var])
+
         if self.optimize_for_loss:
             val_metric = min(history.history["val_loss"])
             best_improvement_condition = val_metric < self.best_val_metric
